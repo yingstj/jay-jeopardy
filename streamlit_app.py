@@ -2,8 +2,44 @@ import streamlit as st
 import pandas as pd
 import random
 import datetime
+import boto3
+import io
 
-# Sample data for testing - replace with your actual data loading later
+# Function to load data from R2
+def load_jeopardy_data_from_r2():
+    try:
+        # Create S3 client for R2
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=st.secrets.get("R2_ENDPOINT_URL", "https://7273c297879bcf94573d10e2b8bbfc7a.r2.cloudflarestorage.com"),
+            aws_access_key_id=st.secrets.get("R2_ACCESS_KEY", "9c27eeaf6574bd7c80915531337fc15c"),
+            aws_secret_access_key=st.secrets.get("R2_SECRET_KEY", "db3cc4453aa7ada3764653206bb43a3a4185988271d90aae277aed2eb8514050")
+        )
+        
+        # Download the file from R2
+        bucket_name = st.secrets.get("R2_BUCKET_NAME", "jeopardy-dataset")
+        file_key = st.secrets.get("R2_FILE_KEY", "all_jeopardy_clues.csv")
+        
+        st.info(f"Attempting to load data from R2 bucket: {bucket_name}")
+        
+        response = s3_client.get_object(Bucket=bucket_name, Key=file_key)
+        data = response['Body'].read()
+        
+        # Load into pandas
+        df = pd.read_csv(io.BytesIO(data))
+        
+        # Convert DataFrame to list of dictionaries
+        clues = df.to_dict(orient="records")
+        
+        st.success(f"Successfully loaded {len(clues)} clues from R2!")
+        return clues
+        
+    except Exception as e:
+        st.error(f"Error loading data from R2: {e}")
+        # Fall back to sample data
+        return sample_data
+
+# Sample data for fallback
 sample_data = [
     {"category": "HISTORY", "clue": "First president of the US", "correct_response": "George Washington"},
     {"category": "SCIENCE", "clue": "Element with symbol H", "correct_response": "Hydrogen"},
@@ -15,6 +51,10 @@ sample_data = [
 
 st.title("🧠 Jay's Jeopardy Trainer")
 
+# Try to load data from R2
+with st.spinner("Loading Jeopardy dataset..."):
+    jeopardy_data = load_jeopardy_data_from_r2()
+
 # Initialize session state
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -24,7 +64,7 @@ if "score" not in st.session_state:
     st.session_state.total = 0
 
 if "current_clue" not in st.session_state:
-    st.session_state.current_clue = random.choice(sample_data)
+    st.session_state.current_clue = random.choice(jeopardy_data)
     st.session_state.start_time = datetime.datetime.now()
 
 # Display current clue
@@ -57,8 +97,8 @@ if submitted:
         "was_correct": correct
     })
 
-    st.session_state.current_clue = random.choice(sample_data)
-    st.experimental_rerun()
+    st.session_state.current_clue = random.choice(jeopardy_data)
+    st.rerun()  # Fixed: Changed from st.experimental_rerun()
 
 # Display score
 if st.session_state.total:
