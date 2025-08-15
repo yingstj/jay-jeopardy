@@ -1,40 +1,71 @@
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import random
+import datetime
 
-"""
-# Welcome to Streamlit!
+# Sample data for testing - replace with your actual data loading later
+sample_data = [
+    {"category": "HISTORY", "clue": "First president of the US", "correct_response": "George Washington"},
+    {"category": "SCIENCE", "clue": "Element with symbol H", "correct_response": "Hydrogen"},
+    {"category": "MOVIES", "clue": "This film won Best Picture in 2020", "correct_response": "Parasite"},
+    {"category": "GEOGRAPHY", "clue": "Largest ocean on Earth", "correct_response": "Pacific Ocean"},
+    {"category": "LITERATURE", "clue": "Author of 'To Kill a Mockingbird'", "correct_response": "Harper Lee"},
+    {"category": "SPORTS", "clue": "Number of players on a standard soccer team", "correct_response": "11"}
+]
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+st.title("🧠 Jay's Jeopardy Trainer")
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+# Initialize session state
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
+if "score" not in st.session_state:
+    st.session_state.score = 0
+    st.session_state.total = 0
 
-indices = np.linspace(0, 1, num_points)
-theta = 2 * np.pi * num_turns * indices
-radius = indices
+if "current_clue" not in st.session_state:
+    st.session_state.current_clue = random.choice(sample_data)
+    st.session_state.start_time = datetime.datetime.now()
 
-x = radius * np.cos(theta)
-y = radius * np.sin(theta)
+# Display current clue
+clue = st.session_state.current_clue
+st.subheader(f"📚 Category: {clue['category']}")
+st.markdown(f"**Clue:** {clue['clue']}")
 
-df = pd.DataFrame({
-    "x": x,
-    "y": y,
-    "idx": indices,
-    "rand": np.random.randn(num_points),
-})
+# Get user response
+with st.form(key="clue_form"):
+    user_input = st.text_input("Your response:")
+    submitted = st.form_submit_button("Submit")
 
-st.altair_chart(alt.Chart(df, height=700, width=700)
-    .mark_point(filled=True)
-    .encode(
-        x=alt.X("x", axis=None),
-        y=alt.Y("y", axis=None),
-        color=alt.Color("idx", legend=None, scale=alt.Scale()),
-        size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-    ))
+if submitted:
+    user_clean = user_input.lower().strip()
+    answer_clean = clue["correct_response"].lower().strip()
+    correct = user_clean == answer_clean
+
+    if correct:
+        st.success("✅ Correct!")
+        st.session_state.score += 1
+    else:
+        st.error(f"❌ Incorrect. The correct response was: *{clue['correct_response']}*")
+
+    st.session_state.total += 1
+    st.session_state.history.append({
+        "category": clue["category"],
+        "clue": clue["clue"],
+        "correct_response": clue["correct_response"],
+        "user_response": user_input,
+        "was_correct": correct
+    })
+
+    st.session_state.current_clue = random.choice(sample_data)
+    st.experimental_rerun()
+
+# Display score
+if st.session_state.total:
+    st.markdown("---")
+    st.metric("Your Score", f"{st.session_state.score} / {st.session_state.total}")
+
+# Display history
+if st.session_state.history:
+    st.subheader("📊 Session Recap")
+    st.dataframe(pd.DataFrame(st.session_state.history))
